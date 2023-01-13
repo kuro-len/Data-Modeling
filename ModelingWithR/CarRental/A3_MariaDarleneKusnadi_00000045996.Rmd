@@ -1,0 +1,292 @@
+---
+title: "Midterm"
+author: "MariaDarleneKusnadi"
+date: "10/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+#=============================Data Preparation========================================
+
+#calling the libraries
+library(psych)
+library(ggplot2)
+library(dplyr)
+library(Amelia)
+library(GGally)
+library(klaR)
+library(caret)
+library(party)
+library(rpart)
+library(rpart.plot)
+library(car)
+library(ROCR)
+library(class)
+library(pscl)
+library(AICcmodavg)
+library(caret)
+library(Rcpp)#version 1.0.7
+library(MASS)
+
+#read data
+MyData <- read.csv("A3_MariaDarleneKusnadi_00000045996.csv")
+summary(MyData$rating)
+
+#Setting outcome variables as categorical
+MyData$class[MyData$rating <= 4.8] <- "Bad"
+MyData$class[MyData$rating > 4.8] <- "Good"
+MyData$class <- as.factor(MyData$class)
+str(MyData)
+
+MyData<-subset(MyData, select = c(class, renterTripsTaken, reviewCount, rate.daily, vehicle.year))
+str(MyData)
+
+#Studying the structure of the data
+library(psych)
+describe(MyData)
+
+#visualize the missing data
+library(Amelia)
+missmap(MyData, x.cex = 0.5)
+
+#omit missing data
+MyData[, 2:4][MyData[, 2:4] == 0] <- NA
+describe(MyData)
+MyData<-na.omit(MyData)
+
+missmap(MyData, x.cex = 0.5)
+
+str(MyData)
+head(MyData)
+
+#renterTripsTaken Visualization
+ggplot(MyData, aes(renterTripsTaken, colour = class)) + 
+  geom_freqpoly(binwidth = 1) + labs(title="RenterTripsTaken Distribution by class")
+
+
+#reviewCount Visualization
+ggplot(MyData, aes(x=reviewCount, fill=class, color=class)) + 
+  geom_histogram(binwidth = 1) + labs(title="ReviewCount Distribution by Class") + theme_bw()
+
+
+#rate.daily Distribution by class
+ggplot(MyData, aes(x=rate.daily, fill=class, color=class)) + geom_histogram(binwidth = 1) + labs(title="Daily Rate Distribution by Class") + theme_bw()
+
+#vehicle.year Distribution by class
+ggplot(MyData, aes(vehicle.year, colour = class)) + geom_freqpoly(binwidth = 1) + labs(title="Vehicle Year Distribution by class")
+
+#good and bad
+ggplot(MyData, aes(class, colour = class, fill = class))+geom_bar() + labs(title="Good and Bad Comparison")
+
+#pairs visualization with ggpairs
+library(GGally)
+ggpairs(MyData)
+
+library(dplyr)
+
+#creating necessary function for downsampling
+library(caret)
+'%ni%' <- Negate('%in%')  # define 'not in' func
+options(scipen=999)
+
+
+#Data is split into 2 parts: training and testing. The split proportions are 75% and 25%.
+NIM=045996 
+set.seed(NIM) 
+ind <- sample(1:NROW(MyData), 0.75*NROW(MyData), replace = FALSE)
+training <- MyData[ind,]
+testing <- MyData[-ind,]
+
+#downsampling training data
+set.seed(NIM)
+down_train <- downSample(x = training[, colnames(training) %ni% "class"],
+ y = training$class)
+table(down_train$Class)
+str(down_train)
+
+
+#Check dimensions of the split 
+NROW(MyData)
+prop.table(table(MyData$class)) * 100
+
+NROW(down_train)
+prop.table(table(down_train$Class)) * 100
+
+NROW(testing)
+prop.table(table(testing$class)) * 100
+
+
+#Data visualization for down-sampled data
+
+
+#renterTripsTaken Visualization
+ggplot(down_train, aes(renterTripsTaken, colour = Class)) + 
+  geom_freqpoly(binwidth = 1) + labs(title="RenterTripsTaken Distribution by class")
+
+ggplot(down_train, aes(renterTripsTaken, colour = Class)) + 
+  geom_boxplot() + labs(title="RenterTripsTaken Distribution by class")
+
+
+#reviewCount Visualization
+ggplot(down_train, aes(x=reviewCount, fill=Class, color=Class)) + 
+  geom_histogram(binwidth = 1) + labs(title="ReviewCount Distribution by Class") + theme_bw()
+
+ggplot(down_train, aes(reviewCount, colour = Class)) + 
+  geom_boxplot() + labs(title="ReviewCount Distribution by Class")
+
+#rate.daily Distribution by class
+ggplot(down_train, aes(x=rate.daily, fill=Class, color=Class)) + geom_histogram(binwidth = 1) + labs(title="Daily Rate Distribution by Class") + theme_bw()
+
+ggplot(down_train, aes(rate.daily, colour = Class)) + 
+  geom_boxplot() + labs(title="Daily Rate Distribution by Class")
+
+#vehicle.year Distribution by class
+ggplot(down_train, aes(vehicle.year, colour = Class)) + geom_freqpoly(binwidth = 1) + labs(title="Vehicle Year Distribution by class")
+
+ggplot(down_train, aes(vehicle.year, colour = Class)) + 
+  geom_boxplot() + labs(title="Vehicle Year Distribution by class")
+
+#good and bad
+ggplot(down_train, aes(Class, colour = Class, fill = Class))+geom_bar()+ labs(title="Good and Bad Comparison \nAfter DownSampling")
+
+```
+
+
+
+
+
+```{r}
+#==============================Decision Tree Algorithm===================================
+describe(MyData)
+
+#-----------Decision tree using **party** package--------------------
+#Fit model using training data
+library(party)
+data_party <- ctree(Class ~ vehicle.year+rate.daily, data = down_train)
+#vehicle.year and rate.daily has low multicollinearity
+print(data_party)
+plot(data_party,type = "simple",main = "Car Rental Data Decision Tree \nBy Maria Darlene Kusnadi 00000045996")
+
+#Data prediction.
+predict_data <- predict(data_party, testing, type = "response")
+
+table_data <- table(predict_data, testing$class)
+
+(plot(predict_data))
+ggplot(testing, aes(class, predict_data, color = class)) +
+   geom_jitter(width = 0.2, height = 0.1, size=2) +
+   labs(title="Confusion Matrix",
+        subtitle="Predicted vs. Observed from CarRental Dataset",
+        y="Predicted",
+        x="Truth",
+        caption="Maria Darlene Kusnadi - 00000045996")
+
+#Confusion Matrixnya.
+
+library(caret)
+caret::confusionMatrix(table_data)
+
+#accuracy = 0.5777 
+#sensitivity = 0.59394   
+#specificity = 0.57545 
+#precision =  0.16443  
+#comment: The accuracy of the model is good to use as prediction because the accuracy reaches 57,77%
+
+(party <- caret::confusionMatrix(table_data))
+
+#-----------Decision tree using **rpart** package--------------------
+str(MyData)
+
+#FitModel using training data
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+
+
+#Fit tree using training data. .
+library(rpart)
+library(rpart.plot)
+fit_rpart_car <- rpart(Class ~vehicle.year+rate.daily, data = down_train)
+print(fit_rpart_car)
+rpart.plot(fit_rpart_car, box.palette = "RdBu", main="Decision Tree Class Car Rental \nby Maria Darlene Kusnadi 00000045996")
+
+#prediction using testing data
+predict_rpart_car <- predict(fit_rpart_car, testing, type = "class")
+(table_rpart = table(predict_rpart_car, testing$class))
+
+(plot(predict_rpart_car))
+ggplot(testing, aes(class, predict_rpart_car, color = class)) +
+   geom_jitter(width = 0.2, height = 0.1, size=2) +
+   labs(title="Confusion Matrix",
+        subtitle="Predicted vs. Observed from CarRental Dataset",
+        y="Predicted",
+        x="Truth",
+        caption="Maria Darlene Kusnadi - 00000045996")
+
+#Confusion Matrix
+library(caret)
+(rpart <- caret::confusionMatrix(table_rpart))
+
+# Accuracy :0.6824   
+# Sensitivity : 0.50909     
+# Specificity :0.70673   
+# Precision:  0.19626  
+# The accuracy of the model is good to use as prediction because the accuracy reaches 68,24%
+
+
+#comparison
+(party_accuracy <- party$overall[1])
+(rpart_accuracy <- rpart$overall[1])
+
+#The model's accuracy using party package (0.5777) is lower than the one using rpart package (0.6824). Overall, specificity, precision, and Kappa of rpart package are also higher than the party package. Therefore, rpart package decision tree model is better than the party package decision tree model.
+
+```
+
+
+
+
+```{r}
+
+#===============================Naive Bayes Algorithm==================================
+str(MyData)
+
+#NBC for class
+library(klaR)
+nb_mod <- NaiveBayes(Class ~ ., data=down_train) #NB classifier model
+pred <- predict(nb_mod, testing) #test model to data testing
+
+#NB model evaluation
+#--------------------Confusion Matrix------------------------
+tab <- table(pred$class, testing$class) 
+library(caret)
+confusionMatrix(tab) 
+
+#Accuracy = 0.423 
+#Sensitivity = 0.71515  
+#Specificity = 0.38193   
+#Precision = 0.13998 
+
+#--------------------Confusion Matrix Plot------------------
+testing$pred <- pred$class
+ggplot(testing, aes(class, pred, color = class)) +
+   geom_jitter(width = 0.2, height = 0.1, size=2) +
+   labs(title="Confusion Matrix",
+        subtitle="Predicted vs. Observed from Car Rental dataset",
+        y="Predicted",
+        x="Truth")
+
+#naive bayes plot
+par(mfrow=c(2,2))
+library(MASS)
+(plot(nb_mod))
+
+```
+
+#=========Conclusion==========
+#Decision Tree algorithm is better suited for this dataset because it has higher accuracy, specificity, and precision.

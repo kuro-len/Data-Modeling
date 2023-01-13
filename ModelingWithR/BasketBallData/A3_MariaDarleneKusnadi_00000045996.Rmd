@@ -1,0 +1,293 @@
+---
+title: "UAS - Basketball Player Stat Clustering"
+author: "MariaDarleneKusnadi - 00000045996"
+date: "12/16/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Data Preparation}
+#------------------------------ Data Preparation ------------------------------# 
+# Library
+library(openintro)
+library(rmarkdown)
+library(knitr)#knit
+library(ggplot2) #make plots
+library(Amelia) #to check missing data
+library(psych)#describe
+library(gridExtra) #arrange plots
+library(tidyverse) #tidy
+library(sampling) #stratified sampling
+library(splitstackshape) #stratified sampling
+
+# Read data & seeing the structure of the data
+MyData <- read.csv("A3_MariaDarleneKusnadi_00000045996.csv")
+str(MyData)
+
+#choosing target variable
+target <- MyData[,3] #deciding target variable : Stage
+target <- as.factor(target)
+
+
+# Seperate the numeric columns
+MyData<-MyData[,c(6:22,27,29)]
+
+MyData <- lapply(MyData, as.numeric)
+MyData$Stage <- target
+MyData<-data.frame(MyData)
+str(MyData)
+
+#Studying the structure of the data
+# Visualize the missing data
+MyData[MyData == 0] <- NA
+describe(MyData)
+
+missmap(MyData, x.cex = 0.5)
+
+
+# Omit missing data
+MyData<-na.omit(MyData)
+missmap(MyData, x.cex = 0.5)
+
+str(MyData)
+head(MyData)
+
+# Multicolinearity check
+multicol1 <- cor (MyData[,1:19])
+multicol1
+
+#omit variables with correlation >0.7
+## Omit GP, MIN, FGM, FGA, X3PA, FTA, TOV, DRB, REB, STL, PTS, weight_kg        
+MyData <- subset(MyData, select = -c(GP, MIN, FGA, X3PA, FTA, REB, STL, TOV, FGM, PTS, weight_kg,DRB))
+
+#check multicolinearity
+multicol2 <- cor(MyData[,1:7])
+multicol2
+
+str(MyData)
+
+# Data visualization
+p1<-ggplot(MyData, aes(x=X3PM, y=Stage , colour = Stage))+geom_boxplot()+labs(title = "Boxplot X3PM according to Stage", subtitle = "By Maria Darlene Kusnadi - 00000045996")+ theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+p2<-ggplot(MyData, aes(x=FTM, y=Stage , colour = Stage))+geom_boxplot()+labs(title = "Boxplot FTM according to Stage", subtitle = "By Maria Darlene Kusnadi - 00000045996")+ theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+p3<-ggplot(MyData, aes(x=PF, y=Stage , colour = Stage))+geom_boxplot()+labs(title = "Boxplot PF according to Stage", subtitle = "By Maria Darlene Kusnadi - 00000045996")+ theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+
+grid.arrange(p1,p2,p3, layout_matrix = rbind(1,2,3))
+
+p4<-ggplot(MyData, aes(x=ORB, y=Stage , colour = Stage))+geom_boxplot()+labs(title = "Boxplot ORB according to Stage", subtitle = "By Maria Darlene Kusnadi - 00000045996")+ theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+p5<-ggplot(MyData, aes(x=AST, y=Stage , colour = Stage))+geom_boxplot()+labs(title = "Boxplot AST according to Stage", subtitle = "By Maria Darlene Kusnadi - 00000045996")+ theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+p6<-ggplot(MyData, aes(x=BLK, y=Stage , colour = Stage))+geom_boxplot()+labs(title = "Boxplot BLK according to Stage", subtitle = "By Maria Darlene Kusnadi - 00000045996")+ theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+
+grid.arrange(p4,p5,p6, layout_matrix = rbind(1,2,3))
+
+p7<-ggplot(MyData, aes(x=height_cm, y=Stage , colour = Stage))+geom_boxplot()+labs(title = "Boxplot Height_cm according to Stage", subtitle = "By Maria Darlene Kusnadi - 00000045996")+ theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+p7
+
+# Stage visualization
+ggplot(MyData, aes(Stage, colour = Stage, fill = Stage))+geom_bar()+labs(title = "Stage Visualization", subtitle = "By Maria Darlene Kusnadi - 00000045996") + theme(plot.title = element_text(size=10), plot.subtitle = element_text(size=8))
+
+#Stratified Sampling
+contohSampling <- MyData
+
+library(splitstackshape)
+head(contohSampling)
+str(contohSampling)
+
+
+#Data is split into 2 parts: training and testing. The split proportions are 75% and 25%.
+seed <- 123456
+set.seed(seed)
+stratSample <- stratified(contohSampling, group = 8, size =0.75, replace = FALSE,bothSets = TRUE)
+
+str(stratSample)
+
+training <- stratSample$SAMP1
+nrow(training)
+testing <- stratSample$SAMP2
+nrow(testing)
+
+#data for clustering
+dataFrame<-testing[,c(1:7)]
+
+```
+
+
+```{r KMeans}
+#------------------------------ K-means ------------------------------ 
+# Library
+library(factoextra) # K-Means Clustering
+library(cluster) #K-Means clustering
+library(datasets) #elbow method
+library(ClusterR) #external validation
+
+# K-means clustering
+NIM = 45996
+set.seed(NIM)
+kluster <- kmeans(dataFrame, centers = 3)
+str(kluster)
+klus_cluster<-kluster$cluster # cluster: a vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+kluster$centers # centers: a matrix of cluster centers.
+kluster$withinss # withinss: vector of within-cluster sum of squares, one component per cluster.
+kluster$tot.withinss # tot.withinss: total within-cluster sum of squares. That is, sum(withinss).
+kluster$size # size: the number of points in each cluster.
+
+
+####Elbow methods
+### Use map_dbl to run many models with varying value of k (centers)
+tot_withinss <- purrr::map_dbl(1:10, function(k){
+  model<-kmeans(x=dataFrame, centers = k, nstart = 25)
+  model$tot.withinss
+})
+
+### Generate a data frame containing both k and tot_withinss
+elbow_df <- data.frame(
+  k = 1:10,
+  tot_withinss <- tot_withinss
+)
+
+
+### plot
+ggplot2::ggplot(elbow_df, aes(k, tot_withinss)) + geom_line() + geom_point(shape = 21, color = "black", fill = "red", size = 2) + scale_x_continuous(breaks = 1:10)+labs(title = "Elbow Method", subtitle = "by Maria Darlene Kusnadi - 00000045996")
+
+#k = 3
+
+
+# Cluster Visualization
+# Compute k-means clustering with k = 3
+set.seed(NIM)
+final <- kmeans(dataFrame, 3, nstart = 25)
+#print(final)
+fviz_cluster(final, data = dataFrame, main = "Cluster Plot \nby Maria Darlene Kusnadi - 00000045996")
+
+#=================== scaled ===================#
+dataFrame_scaled <- scale(dataFrame)
+
+####Elbow methods
+### Use map_dbl to run many models with varying value of k (centers)
+tot_withinss_scaled <- purrr::map_dbl(1:10, function(k){
+  model_scaled<-kmeans(x=dataFrame_scaled, centers = k, nstart = 25)
+  model_scaled$tot.withinss
+})
+
+### Generate a data frame containing both k and tot_withinss
+elbow_df_scaled <- data.frame(
+  k = 1:10,
+  tot_withinss_scaled <- tot_withinss_scaled
+)
+
+
+### plot
+ggplot2::ggplot(elbow_df_scaled, aes(k, tot_withinss_scaled)) + geom_line() + geom_point(shape = 21, color = "black", fill = "red", size = 2) + scale_x_continuous(breaks = 1:10)+labs(title = "Elbow Method (scaled)", subtitle = "by Maria Darlene Kusnadi - 00000045996")
+
+#k = 3
+
+# Cluster Visualization
+# Compute k-means clustering with k = 3
+set.seed(NIM)
+final_scaled <- kmeans(dataFrame_scaled, 3, nstart = 25)
+#print(final)
+fviz_cluster(final_scaled, data = dataFrame_scaled, main = "Cluster Plot Scaled \nby Maria Darlene Kusnadi - 00000045996")
+
+
+## External Validation without Scaled data
+newdata <- data.frame(final$cluster, testing$Stage)
+newdata <- subset(newdata, final$cluster != 0)
+
+newdata_scaled <- data.frame(final_scaled$cluster, testing$Stage)
+newdata_scaled<-subset(newdata_scaled, final_scaled$cluster != 0)
+
+## External Validation without Scaled data
+(kmeans_valid_ari <- external_validation(as.numeric(testing$Stage), newdata$final.cluster, 
+                          method = "adjusted_rand_index", summary_stats = T))
+(kmeans_valid_vi <- external_validation(as.numeric(testing$Stage), newdata$final.cluster, 
+                          method = "var_info", summary_stats = T))
+
+## External Validation with Scaled data
+(kmeans_valid_scaled_ari <- external_validation(as.numeric(testing$Stage), newdata_scaled$final_scaled.cluster,
+                          method = "adjusted_rand_index", summary_stats = T))
+(kmeans_valid_scaled_vi <- external_validation(as.numeric(testing$Stage), newdata_scaled$final_scaled.cluster,
+                          method = "var_info", summary_stats = T))
+
+
+```
+
+
+```{r KMedoids}
+#------------------------------ K-medoids ------------------------------ 
+# library
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(ClusterR)#external validation
+
+
+# cluster uses pam method
+NIM = 45996
+set.seed(NIM)
+fviz_nbclust(dataFrame, pam, method = "wss")
+#k=4
+
+# clustering with k = 3
+#even though according to the elbow method the optimal number of k is 4, 3 is more suitable for this application of clustering algorithm.
+set.seed(NIM)
+pam.hasil  <- pam(dataFrame, 3)
+#summary(pam.hasil)
+str(pam.hasil)
+
+
+# Visualize Cluster
+fviz_cluster(pam.hasil)
+
+
+# Pred vs Truth  
+## External Validation without Scaled data
+kmed_newdata <- data.frame(pam.hasil$cluster, testing$Stage)
+kmed_newdata <- subset(kmed_newdata, pam.hasil$cluster != 0)
+
+#========================================== Scaled ===========================
+dataFrame_scaled <- scale(dataFrame)
+set.seed(NIM)
+fviz_nbclust(dataFrame_scaled, pam, method = "wss")
+#k= 4
+
+# clustering dengan k = 3
+#even though according to the elbow method the optimal number of k is 4, 3 is more suitable for this application of clustering algorithm.
+set.seed(NIM)
+pam.hasil_scaled  <- pam(dataFrame_scaled, 3)
+#summary(pam.hasil_scaled)
+str(pam.hasil_scaled)
+
+# Visualize Cluster
+fviz_cluster(pam.hasil_scaled)
+
+## External Validation with Scaled data
+kmed_newdata_scaled <- data.frame(pam.hasil_scaled$cluster, testing$Stage)
+kmed_newdata_scaled<-subset(kmed_newdata_scaled, pam.hasil_scaled$cluster != 0)
+
+## External Validation without Scaled data
+(kmed_valid_ari <- external_validation(as.numeric(testing$Stage), kmed_newdata$pam.hasil.cluster, 
+                          method = "adjusted_rand_index", summary_stats = T))
+(kmed_valid_vi <- external_validation(as.numeric(testing$Stage), kmed_newdata$pam.hasil.cluster, 
+                          method = "var_info", summary_stats = T))
+
+## External Validation with Scaled data
+(kmed_valid_scaled_ari <- external_validation(as.numeric(testing$Stage), kmed_newdata_scaled$pam.hasil_scaled.cluster,
+                          method = "adjusted_rand_index", summary_stats = T))
+(kmed_valid_scaled_vi <- external_validation(as.numeric(testing$Stage), kmed_newdata_scaled$pam.hasil_scaled.cluster,
+                          method = "var_info", summary_stats = T))
+
+```
+
+```{r}
+#------------------------------ Comparison ------------------------------ 
+algorithm <- c("K-Means", "K-Means scaled", "K-Medoids", "K-Medoids scaled")
+accuracy <- c("0.6168", "0.5607", "0.5207", "0.4415 ")
+(comparison_table <- data.frame(algorithm, accuracy))
+
+```
+
+
